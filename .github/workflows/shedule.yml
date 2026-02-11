@@ -16,7 +16,7 @@ jobs:
             - name: Set up Python
               uses: actions/setup-python@v4
               with:
-                  python-version: $(cat .python-version)
+                  python-version-file: .python-version
 
             # Install dependencies (if any)
             - name: Install dependencies
