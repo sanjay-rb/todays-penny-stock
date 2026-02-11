@@ -1,0 +1,40 @@
+name: Todays Penny Stock - Indian Market
+
+on:
+    schedule:
+        - cron: "30 4 * * *" # Run at 10:00 AM IST every day
+    workflow_dispatch:
+
+jobs:
+    love:
+        runs-on: ubuntu-latest
+        steps:
+            # Checkout the repository
+            - uses: actions/checkout@v4
+
+            # Set up Python (if needed for future enhancements)
+            - name: Set up Python
+              uses: actions/setup-python@v4
+              with:
+                  python-version: $(cat .python-version)
+
+            # Install dependencies (if any)
+            - name: Install dependencies
+              run: |
+                  python -m pip install --upgrade pip
+                  pip install -r requirements.txt
+
+            # Run linting (optional, can be removed if not needed)
+            - name: Run pylint
+              run: |
+                  pylint main.py
+
+            # Create .env file with secrets
+            - name: Create .env file
+              run: |
+                  echo "${{ secrets.DOT_ENV }}" | base64 --decode > .env
+
+            # Trigger the Python script
+            - name: Run main.py
+              run: |
+                  python main.py
