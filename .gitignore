@@ -205,3 +205,8 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Local Files
+todays_penny_stock_out.txt
+serp_data_out.json
+summary_out.txt

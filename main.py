@@ -1,108 +1,23 @@
 """
-Today's Penny Stock - Indian Market
-Author: Sanjay Reddy B
+This module contains the main function to start the application.
 """
 
 import os
-import datetime
 import logging
-
 import requests
-from openai import OpenAI
+
 from dotenv import load_dotenv
+from openai import OpenAI
+
+load_dotenv()
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-# from ollama import chat  # Uncomment if using Ollama
 
-# =============================
-# CONFIG
-# =============================
-load_dotenv()  # Load environment variables from .env file
-
-
-# =============================
-# STEP 1: SERPAPI QUERY
-# =============================
-def get_serp_data():
-    """Fetch data from SerpAPI."""
-    today = datetime.date.today().strftime("%B %d, %Y")
-
-    params = {
-        "engine": "google_ai",
-        "q": (
-            f"Top penny stocks to buy in India for long-term investment, "
-            f"including stock names and IDs for {today}"
-        ),
-        "api_key": os.getenv("SERPAPI_KEY"),
-    }
-
-    url = "https://serpapi.com/search"
-
-    response = requests.get(url, params=params, timeout=10)
-
-    if response.status_code == 200:
-        logging.info(response.text)
-    else:
-        logging.error("Error fetching SerpAPI data: %s", response.status_code)
-
-    return response.json()
-
-
-# =============================
-# STEP 2: EXTRACT TEXT (like your JS node)
-# =============================
-def extract_text(item):
-    """Recursively extract text from nested structures."""
-    texts = []
-
-    if isinstance(item, dict):
-        if "snippet" in item and isinstance(item["snippet"], str):
-            texts.append(item["snippet"])
-
-        if "list" in item and isinstance(item["list"], list):
-            for el in item["list"]:
-                texts.extend(extract_text(el))
-
-    elif isinstance(item, list):
-        for el in item:
-            texts.extend(extract_text(el))
-
-    return texts
-
-
-def combine_text_blocks(data):
-    """Combine all text blocks into a single string."""
-    all_texts = []
-
-    text_blocks = data.get("text_blocks", [])
-    for item in text_blocks:
-        all_texts.extend(extract_text(item))
-
-    return " ".join(all_texts)
-
-
-# =============================
-# STEP 3: LLM ANALYSIS
-# =============================
-def analyze_with_llm(user_prompt):
-    """Use OpenAI API to analyze the combined text and generate a recommendation."""
-
-    system_prompt = """
-You are a highly intelligent financial research assistant specialized in the Indian stock market.
-Choose the best long-term, future-focused Indian penny stock.
-Retain the exact stock symbol from the text.
-Format output exactly as:
-
-📈 *Best Penny Stock for Today — Indian Market*
-
-*Company:* {Company Name} (`{Stock Symbol}`)
-🚀 *Growth Potential:* ...
-📌 *Key Reason:* ...
-⚠️ *Key Risks:* ...
-"""
+def ask_llm(user_prompt):
+    """Use OpenAI API to generate a response to the user's prompt."""
 
     client = OpenAI(
         base_url="https://openrouter.ai/api/v1", api_key=os.getenv("OPENROUTER_KEY")
@@ -110,19 +25,63 @@ Format output exactly as:
 
     response = client.chat.completions.create(
         model="openrouter/free",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        temperature=0.4,
+        messages=[{"role": "user", "content": user_prompt}],
+        temperature=0.1,
     )
 
     return response.choices[0].message.content
 
 
-# =============================
-# STEP 4: SEND TO TELEGRAM
-# =============================
+def fetch_serpapi_data():
+    """Get today's penny stocks details from the SerpAPI using Google AI Mode engine."""
+
+    params = {
+        "engine": "google_ai_mode",
+        "q": "today's penny stocks to buy for long term in india under 100 rupees.",
+        "api_key": os.getenv("SERPAPI_KEY"),
+    }
+
+    url = "https://serpapi.com/search"
+
+    response = requests.get(url, params=params, timeout=30)
+
+    if response.status_code == 200:
+        return response.json()
+    else:
+        logging.error("Error fetching SerpAPI data: %s", response.status_code)
+        raise ValueError(f"SerpAPI error: {response.status_code} - {response.text}")
+
+
+def summerize_text(text):
+    """Create chunks of the the text and summarize each chunk and give a final summary."""
+
+    chunk_size = 2000
+    chunks = [text[i : i + chunk_size] for i in range(0, len(text), chunk_size)]
+    summaries = [""]
+    prompt_template = open("summeriser_llm_prompt.txt", encoding="utf-8").read()
+    for chunk in chunks:
+        prompt = prompt_template.format(
+            input_text=chunk, previous_summary=summaries[-1]
+        )
+        current_summary = ask_llm(prompt)
+        summaries.append(current_summary)
+    final_summary = summaries[-1]
+    logging.info("Summary:\n%s", final_summary)
+    return final_summary
+
+
+def generate_recommendation(summarized_data):
+    """Generate a recommendation based on the summarized data."""
+
+    prompt_template = open(
+        "financial_research_assistant_prompt.txt", encoding="utf-8"
+    ).read()
+    prompt = prompt_template.format(summarized_data=summarized_data)
+    recommendation = ask_llm(prompt)
+    logging.info("Recommendation:\n%s", recommendation)
+    return recommendation
+
+
 def send_to_telegram(message):
     """Send the generated message to Telegram."""
     url = f"https://api.telegram.org/bot{os.getenv('TELEGRAM_BOT_TOKEN')}/sendMessage"
@@ -140,20 +99,39 @@ def send_to_telegram(message):
         print("Message sent to Telegram")
 
 
-# =============================
-# MAIN FLOW
-# =============================
+def main():
+    """Main function to start the application."""
+
+    logging.info("Starting the application...")
+
+    logging.info("Loading environment variables...")
+    load_dotenv()
+    logging.info("Environment variables loaded successfully.")
+
+    logging.info("Fetching SerpAPI data...")
+    serp_data = fetch_serpapi_data()
+    logging.info("SerpAPI data fetched successfully.")
+
+    logging.info("Summarizing the data...")
+    summary = summerize_text(serp_data["reconstructed_markdown"])
+    logging.info("Data summarized successfully.")
+
+    logging.info("Generating recommendation...")
+    todays_penny_stock = generate_recommendation(summary)
+    logging.info("Recommendation generated successfully.")
+
+    logging.info("Adding URL to the recommendation...")
+    todays_penny_stock += (
+        f"\n*🔗 URL:* {serp_data['search_metadata']['prettify_html_file']}"
+    )
+    logging.info("URL added successfully.")
+
+    logging.info("Sending recommendation to Telegram...")
+    send_to_telegram(todays_penny_stock)
+    logging.info("Recommendation sent to Telegram successfully.")
+
+    logging.info("Application finished.")
+
+
 if __name__ == "__main__":
-    print("Fetching SerpAPI data...")
-    serp_data = get_serp_data()
-
-    print("Combining text blocks...")
-    COMBINED_TEXT = combine_text_blocks(serp_data)
-
-    print("Analyzing with LLM...")
-    result = analyze_with_llm(COMBINED_TEXT)
-
-    print("Sending to Telegram...")
-    send_to_telegram(result)
-
-    print("Done ✅")
+    main()
