@@ -1,3 +1,5 @@
+# pylint: disable=consider-using-with
+
 """
 This module contains the main function to start the application.
 """
@@ -47,9 +49,9 @@ def fetch_serpapi_data():
 
     if response.status_code == 200:
         return response.json()
-    else:
-        logging.error("Error fetching SerpAPI data: %s", response.status_code)
-        raise ValueError(f"SerpAPI error: {response.status_code} - {response.text}")
+
+    logging.error("Error fetching SerpAPI data: %s", response.status_code)
+    raise ValueError(f"SerpAPI error: {response.status_code} - {response.text}")
 
 
 def summerize_text(text):
