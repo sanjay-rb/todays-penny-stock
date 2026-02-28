@@ -54,24 +54,6 @@ def fetch_serpapi_data():
     raise ValueError(f"SerpAPI error: {response.status_code} - {response.text}")
 
 
-def summerize_text(text):
-    """Create chunks of the the text and summarize each chunk and give a final summary."""
-
-    chunk_size = 2000
-    chunks = [text[i : i + chunk_size] for i in range(0, len(text), chunk_size)]
-    summaries = [""]
-    prompt_template = open("summeriser_llm_prompt.txt", encoding="utf-8").read()
-    for chunk in chunks:
-        prompt = prompt_template.format(
-            input_text=chunk, previous_summary=summaries[-1]
-        )
-        current_summary = ask_llm(prompt)
-        summaries.append(current_summary)
-    final_summary = summaries[-1]
-    logging.info("Summary:\n%s", final_summary)
-    return final_summary
-
-
 def generate_recommendation(summarized_data):
     """Generate a recommendation based on the summarized data."""
 
@@ -114,12 +96,8 @@ def main():
     serp_data = fetch_serpapi_data()
     logging.info("SerpAPI data fetched successfully.")
 
-    logging.info("Summarizing the data...")
-    summary = summerize_text(serp_data["reconstructed_markdown"])
-    logging.info("Data summarized successfully.")
-
     logging.info("Generating recommendation...")
-    todays_penny_stock = generate_recommendation(summary)
+    todays_penny_stock = generate_recommendation(serp_data["reconstructed_markdown"])
     logging.info("Recommendation generated successfully.")
 
     logging.info("Adding URL to the recommendation...")
